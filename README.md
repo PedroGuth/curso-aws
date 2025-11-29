@@ -271,12 +271,6 @@ Este curso prepara você para:
 - ✅ **Material de referência** e documentação
 - ✅ **Arquitetura completa** ao final do curso
 
-## ⏱️ Duração Estimada
-
-- **Total:** 20-25 horas
-- **Teoria:** 8-10 horas
-- **Hands-on Labs:** 12-15 horas
-
 ## 🔒 Segurança e Boas Práticas
 
 - Configuração adequada de Security Groups
@@ -286,7 +280,7 @@ Este curso prepara você para:
 - Monitoramento e logging
 - Backup regular
 
-## 📊 Projeto Final
+## 📊 Final
 
 Ao final do curso, você terá criado:
 
@@ -347,12 +341,6 @@ Este projeto está sob a licença MIT. Veja o arquivo [LICENSE](LICENSE) para ma
 - AWS Certified Solutions Architect
 - Especialista em infraestrutura cloud
 - Criador de conteúdo técnico
-
-## 📞 Suporte
-
-- 📧 Email: [seu-email@exemplo.com]
-- 💬 Issues: [GitHub Issues](https://github.com/PedroGuth/curso-aws/issues)
-- 📚 Documentação: [Wiki do Projeto](https://github.com/PedroGuth/curso-aws/wiki)
 
 ## 🌟 Destaques do Curso
 
