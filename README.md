@@ -205,8 +205,58 @@ Configuração de backups automáticos, snapshots e restauração.
 ├── README.md                              # Este arquivo
 ├── arquitetura-aws-alta-disponibilidade.md # Conteúdo completo do curso
 ├── Basico-AWS.pdf                         # Material em PDF
-└── Curso-Basico-AWS.png                   # Imagem do curso
+├── Curso-Basico-AWS.png                   # Imagem do curso
+├── cloudformation-alta-disponibilidade.yaml # Template CloudFormation completo
+└── user-data-efs-httpd.sh                 # Script de inicialização das instâncias EC2
 ```
+
+### 🚀 Template CloudFormation Pronto para Uso
+
+Este repositório inclui um **template CloudFormation completo** que implementa toda a arquitetura de alta disponibilidade descrita no curso:
+
+**Arquivo:** `cloudformation-alta-disponibilidade.yaml`
+
+**O que está incluído:**
+- ✅ VPC completa com sub-redes públicas, privadas de aplicação e privadas de banco de dados
+- ✅ Internet Gateway e 2 NAT Gateways (um por AZ)
+- ✅ Application Load Balancer público
+- ✅ Auto Scaling Group com instâncias EC2 (t3.micro)
+- ✅ Amazon EFS com mount targets em 2 AZs
+- ✅ Amazon Aurora MySQL (db.t3.small) com instância primária e réplica
+- ✅ Security Groups configurados para cada camada
+- ✅ Secrets Manager para credenciais do banco de dados
+- ✅ Todos os recursos com prefixo "Aula-" conforme especificado
+
+**Como usar:**
+
+```bash
+# 1. Validar o template
+aws cloudformation validate-template \
+  --template-body file://cloudformation-alta-disponibilidade.yaml \
+  --region us-east-2
+
+# 2. Criar a stack
+aws cloudformation create-stack \
+  --stack-name Aula-HighAvailability \
+  --template-body file://cloudformation-alta-disponibilidade.yaml \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --region us-east-2 \
+  --parameters ParameterKey=KeyName,ParameterValue=""
+
+# 3. Monitorar a criação (pode levar 15-20 minutos)
+aws cloudformation wait stack-create-complete \
+  --stack-name Aula-HighAvailability \
+  --region us-east-2
+
+# 4. Obter a URL do ALB
+aws cloudformation describe-stacks \
+  --stack-name Aula-HighAvailability \
+  --region us-east-2 \
+  --query 'Stacks[0].Outputs[?OutputKey==`ALBURL`].OutputValue' \
+  --output text
+```
+
+**Nota:** O template está configurado para a região `us-east-2`. Para usar em outra região, ajuste as Availability Zones no template.
 
 ## 🚀 Como Começar
 
