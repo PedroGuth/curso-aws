@@ -1,0 +1,559 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Arquitetura AWS Alta Disponibilidade - Aula B?sico AWS
+Parameters:
+  KeyName:
+    Type: String
+    Default: ''
+    Description: Nome do Key Pair para acesso SSH ?s inst?ncias EC2 (deixe vazio se n?o precisar de SSH)
+Conditions:
+  HasKeyName:
+    Fn::Not:
+    - Fn::Equals:
+      - Ref: KeyName
+      - ''
+Resources:
+  AulaVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+      - Key: Name
+        Value: Aula-VPC
+  AulaIGW:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+      - Key: Name
+        Value: Aula-IGW
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId:
+        Ref: AulaVPC
+      InternetGatewayId:
+        Ref: AulaIGW
+  AulaPublicSubnetAZ1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: AulaVPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: us-east-2a
+      MapPublicIpOnLaunch: true
+      Tags:
+      - Key: Name
+        Value: Aula-PublicSubnet-AZ1
+  AulaPublicSubnetAZ2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: AulaVPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: us-east-2b
+      MapPublicIpOnLaunch: true
+      Tags:
+      - Key: Name
+        Value: Aula-PublicSubnet-AZ2
+  AulaAppSubnetAZ1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: AulaVPC
+      CidrBlock: 10.0.11.0/24
+      AvailabilityZone: us-east-2a
+      Tags:
+      - Key: Name
+        Value: Aula-AppSubnet-AZ1
+  AulaAppSubnetAZ2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: AulaVPC
+      CidrBlock: 10.0.12.0/24
+      AvailabilityZone: us-east-2b
+      Tags:
+      - Key: Name
+        Value: Aula-AppSubnet-AZ2
+  AulaDBSubnetAZ1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: AulaVPC
+      CidrBlock: 10.0.21.0/24
+      AvailabilityZone: us-east-2a
+      Tags:
+      - Key: Name
+        Value: Aula-DBSubnet-AZ1
+  AulaDBSubnetAZ2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: AulaVPC
+      CidrBlock: 10.0.22.0/24
+      AvailabilityZone: us-east-2b
+      Tags:
+      - Key: Name
+        Value: Aula-DBSubnet-AZ2
+  AulaEIPNATAZ1:
+    Type: AWS::EC2::EIP
+    DependsOn: AttachGateway
+    Properties:
+      Domain: vpc
+      Tags:
+      - Key: Name
+        Value: Aula-EIP-NAT-AZ1
+  AulaNATGatewayAZ1:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId:
+        Fn::GetAtt:
+        - AulaEIPNATAZ1
+        - AllocationId
+      SubnetId:
+        Ref: AulaPublicSubnetAZ1
+      Tags:
+      - Key: Name
+        Value: Aula-NATGateway-AZ1
+  AulaEIPNATAZ2:
+    Type: AWS::EC2::EIP
+    DependsOn: AttachGateway
+    Properties:
+      Domain: vpc
+      Tags:
+      - Key: Name
+        Value: Aula-EIP-NAT-AZ2
+  AulaNATGatewayAZ2:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId:
+        Fn::GetAtt:
+        - AulaEIPNATAZ2
+        - AllocationId
+      SubnetId:
+        Ref: AulaPublicSubnetAZ2
+      Tags:
+      - Key: Name
+        Value: Aula-NATGateway-AZ2
+  AulaPublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: AulaVPC
+      Tags:
+      - Key: Name
+        Value: Aula-PublicRouteTable
+  AulaPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId:
+        Ref: AulaPublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId:
+        Ref: AulaIGW
+  AulaPublicSubnetRouteTableAssociationAZ1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: AulaPublicSubnetAZ1
+      RouteTableId:
+        Ref: AulaPublicRouteTable
+  AulaPublicSubnetRouteTableAssociationAZ2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: AulaPublicSubnetAZ2
+      RouteTableId:
+        Ref: AulaPublicRouteTable
+  AulaPrivateRouteTableAZ1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: AulaVPC
+      Tags:
+      - Key: Name
+        Value: Aula-PrivateRouteTable-AZ1
+  AulaPrivateRouteAZ1:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Ref: AulaPrivateRouteTableAZ1
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId:
+        Ref: AulaNATGatewayAZ1
+  AulaAppSubnetRouteTableAssociationAZ1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: AulaAppSubnetAZ1
+      RouteTableId:
+        Ref: AulaPrivateRouteTableAZ1
+  AulaPrivateRouteTableAZ2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: AulaVPC
+      Tags:
+      - Key: Name
+        Value: Aula-PrivateRouteTable-AZ2
+  AulaPrivateRouteAZ2:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Ref: AulaPrivateRouteTableAZ2
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId:
+        Ref: AulaNATGatewayAZ2
+  AulaAppSubnetRouteTableAssociationAZ2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: AulaAppSubnetAZ2
+      RouteTableId:
+        Ref: AulaPrivateRouteTableAZ2
+  AulaSGALB:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: Aula-SG-ALB
+      GroupDescription: Security Group for Application Load Balancer
+      VpcId:
+        Ref: AulaVPC
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        CidrIp: 0.0.0.0/0
+      Tags:
+      - Key: Name
+        Value: Aula-SG-ALB
+  AulaSGEC2:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: Aula-SG-EC2
+      GroupDescription: Security Group for EC2 instances
+      VpcId:
+        Ref: AulaVPC
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        SourceSecurityGroupId:
+          Ref: AulaSGALB
+      Tags:
+      - Key: Name
+        Value: Aula-SG-EC2
+  AulaSGEFS:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: Aula-SG-EFS
+      GroupDescription: Security Group for EFS
+      VpcId:
+        Ref: AulaVPC
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 2049
+        ToPort: 2049
+        SourceSecurityGroupId:
+          Ref: AulaSGEC2
+      Tags:
+      - Key: Name
+        Value: Aula-SG-EFS
+  AulaSGRDS:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: Aula-SG-RDS
+      GroupDescription: Security Group for RDS Aurora
+      VpcId:
+        Ref: AulaVPC
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 3306
+        ToPort: 3306
+        SourceSecurityGroupId:
+          Ref: AulaSGEC2
+      Tags:
+      - Key: Name
+        Value: Aula-SG-RDS
+  AulaEFS:
+    Type: AWS::EFS::FileSystem
+    Properties:
+      Encrypted: true
+      PerformanceMode: generalPurpose
+      ThroughputMode: bursting
+      FileSystemTags:
+      - Key: Name
+        Value: Aula-EFS
+  AulaEFSMountTargetAZ1:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId:
+        Ref: AulaEFS
+      SubnetId:
+        Ref: AulaAppSubnetAZ1
+      SecurityGroups:
+      - Ref: AulaSGEFS
+  AulaEFSMountTargetAZ2:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId:
+        Ref: AulaEFS
+      SubnetId:
+        Ref: AulaAppSubnetAZ2
+      SecurityGroups:
+      - Ref: AulaSGEFS
+  AulaDBSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: Aula-Aurora-Secret
+      Description: Credenciais do Aurora MySQL
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "admin"}'
+        GenerateStringKey: password
+        PasswordLength: 16
+        ExcludeCharacters: '"@/\'
+  AulaDBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupName: aula-db-subnet-group
+      DBSubnetGroupDescription: Subnet group para Aurora
+      SubnetIds:
+      - Ref: AulaDBSubnetAZ1
+      - Ref: AulaDBSubnetAZ2
+      Tags:
+      - Key: Name
+        Value: Aula-DBSubnetGroup
+  AulaAuroraCluster:
+    Type: AWS::RDS::DBCluster
+    Properties:
+      DBClusterIdentifier: aula-aurora-cluster
+      Engine: aurora-mysql
+      EngineVersion: 5.7.mysql_aurora.2.11.2
+      DatabaseName: meubanco
+      MasterUsername:
+        Fn::Sub: '{{resolve:secretsmanager:${AulaDBSecret}:SecretString:username}}'
+      MasterUserPassword:
+        Fn::Sub: '{{resolve:secretsmanager:${AulaDBSecret}:SecretString:password}}'
+      DBSubnetGroupName:
+        Ref: AulaDBSubnetGroup
+      VpcSecurityGroupIds:
+      - Ref: AulaSGRDS
+      BackupRetentionPeriod: 1
+      PreferredBackupWindow: 03:00-04:00
+      PreferredMaintenanceWindow: mon:04:00-mon:05:00
+      Tags:
+      - Key: Name
+        Value: Aula-Aurora-Cluster
+  AulaAuroraPrimary:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: aula-aurora-primary
+      DBInstanceClass: db.t3.small
+      Engine: aurora-mysql
+      DBClusterIdentifier:
+        Ref: AulaAuroraCluster
+      PubliclyAccessible: false
+      Tags:
+      - Key: Name
+        Value: Aula-Aurora-Primary
+  AulaAuroraReplica:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: aula-aurora-replica
+      DBInstanceClass: db.t3.small
+      Engine: aurora-mysql
+      DBClusterIdentifier:
+        Ref: AulaAuroraCluster
+      PubliclyAccessible: false
+      Tags:
+      - Key: Name
+        Value: Aula-Aurora-Replica
+  AulaEC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: Aula-EC2-Role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: ec2.amazonaws.com
+          Action: sts:AssumeRole
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Policies:
+      - PolicyName: SecretsManagerAccess
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - secretsmanager:GetSecretValue
+            Resource:
+              Ref: AulaDBSecret
+  AulaEC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: Aula-EC2-InstanceProfile
+      Roles:
+      - Ref: AulaEC2Role
+  AulaALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: Aula-ALB
+      Type: application
+      Scheme: internet-facing
+      IpAddressType: ipv4
+      Subnets:
+      - Ref: AulaPublicSubnetAZ1
+      - Ref: AulaPublicSubnetAZ2
+      SecurityGroups:
+      - Ref: AulaSGALB
+      Tags:
+      - Key: Name
+        Value: Aula-ALB
+  AulaTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: Aula-TargetGroup
+      Port: 80
+      Protocol: HTTP
+      VpcId:
+        Ref: AulaVPC
+      HealthCheckEnabled: true
+      HealthCheckPath: /
+      HealthCheckProtocol: HTTP
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      TargetType: instance
+      Tags:
+      - Key: Name
+        Value: Aula-TargetGroup
+  AulaALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn:
+        Ref: AulaALB
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+      - Type: forward
+        TargetGroupArn:
+          Ref: AulaTargetGroup
+  AulaLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    DependsOn:
+    - AulaEFSMountTargetAZ1
+    - AulaEFSMountTargetAZ2
+    - AulaAuroraPrimary
+    Properties:
+      LaunchTemplateName: Aula-LaunchTemplate
+      LaunchTemplateData:
+        ImageId: ami-0979de60fed46582f
+        InstanceType: t3.micro
+        IamInstanceProfile:
+          Arn:
+            Fn::GetAtt:
+            - AulaEC2InstanceProfile
+            - Arn
+        SecurityGroupIds:
+        - Ref: AulaSGEC2
+        UserData:
+          Fn::Base64:
+            Fn::Sub:
+            - "#!/bin/bash\nset -e\nexec > /var/log/user-data.log 2>&1\n\nyum update -y\nyum install -y amazon-efs-utils httpd php php-fpm php-mysqlnd php-pdo jq\n\nmkdir -p /mnt/efs\nsleep 30\nmount -t efs -o tls ${EfsId}:/ /mnt/efs\nmountpoint -q /mnt/efs || exit 1\necho \"${EfsId}:/ /mnt/efs efs _netdev,tls 0 0\" >> /etc/fstab\n\nmkdir -p /mnt/efs/html\nINSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)\n\n# Cria arquivo PHP local (na instancia EC2) que lista arquivos dinamicamente\ncat > /var/www/html/index.php << 'ENDOFPHP'\n<?php\n$localDir = '/var/www/html';\n$instanceId = @file_get_contents('http://169.254.169.254/latest/meta-data/instance-id') ?: 'N/A';\n$files = @scandir($localDir) ?: array();\n$files = array_diff($files, array('.', '..', 'index.php'));\n$files = array_values($files); // Reindexa o array\n?>\n<!DOCTYPE html>\n<html lang=\"pt-BR\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"\
+              >\n    <title>Demonstracao EFS - Arquivos Locais</title>\n    <style>\n        body {\n            font-family: Arial, sans-serif;\n            max-width: 800px;\n            margin: 50px auto;\n            padding: 20px;\n            background-color: #f5f5f5;\n        }\n        .container {\n            background-color: white;\n            padding: 30px;\n            border-radius: 8px;\n            box-shadow: 0 2px 4px rgba(0,0,0,0.1);\n        }\n        h1 {\n            color: #232f3e;\n            border-bottom: 3px solid #ff9900;\n            padding-bottom: 10px;\n        }\n        .info {\n            background-color: #e6f2ff;\n            padding: 15px;\n            border-left: 4px solid #0066cc;\n            margin: 20px 0;\n        }\n        .file-list {\n            background-color: #f9f9f9;\n            padding: 15px;\n            border-radius: 4px;\n            margin: 15px 0;\n        }\n        .file-item {\n            padding: 8px;\n           \
+              \ margin: 5px 0;\n            background-color: white;\n            border-left: 3px solid #ff9900;\n            display: flex;\n            justify-content: space-between;\n            align-items: center;\n        }\n        .file-item a {\n            color: #0066cc;\n            text-decoration: none;\n            font-weight: bold;\n        }\n        .file-item a:hover {\n            text-decoration: underline;\n        }\n        .file-size {\n            color: #666;\n            font-size: 0.9em;\n        }\n        a {\n            color: #0066cc;\n            text-decoration: none;\n        }\n        a:hover {\n            text-decoration: underline;\n        }\n    </style>\n</head>\n<body>\n    <div class=\"container\">\n        <h1>\U0001F4C1 Arquivos Locais (EC2 Instance)</h1>\n        <div class=\"info\">\n            <strong>Localizacao:</strong> <?php echo htmlspecialchars($localDir); ?><br>\n            <strong>Status:</strong> Armazenado localmente na instancia\
+              \ EC2<br>\n            <strong>Comportamento:</strong> Este arquivo existe apenas nesta instancia especifica<br>\n            <strong>Instance ID:</strong> <?php echo htmlspecialchars($instanceId); ?><br>\n            <strong>Total de arquivos:</strong> <?php echo count($files); ?>\n        </div>\n        <div class=\"file-list\">\n            <h3>Arquivos Locais Disponiveis (Lista Dinamica):</h3>\n            <?php if (empty($files)): ?>\n                <div class=\"file-item\">Nenhum arquivo encontrado (exceto este index.php)</div>\n            <?php else: ?>\n                <?php foreach ($files as $file): ?>\n                    <?php\n                    $filePath = $localDir . '/' . $file;\n                    $fileSize = is_file($filePath) ? filesize($filePath) : 0;\n                    $fileSizeFormatted = $fileSize > 1024 ? number_format($fileSize / 1024, 2) . ' KB' : $fileSize . ' bytes';\n                    $icon = is_dir($filePath) ? '\U0001F4C1' : '\U0001F4C4\
+              ';\n                    ?>\n                    <div class=\"file-item\">\n                        <span>\n                            <?php echo $icon; ?> \n                            <?php if (is_file($filePath)): ?>\n                                <a href=\"<?php echo htmlspecialchars($file); ?>\"><?php echo htmlspecialchars($file); ?></a>\n                            <?php else: ?>\n                                <?php echo htmlspecialchars($file); ?>\n                            <?php endif; ?>\n                        </span>\n                        <span class=\"file-size\"><?php echo $fileSizeFormatted; ?></span>\n                    </div>\n                <?php endforeach; ?>\n            <?php endif; ?>\n        </div>\n        <p><a href=\"/efs/\">\U0001F449 EFS</a> | <a href=\"/rds.php\">\U0001F5C4? RDS</a></p>\n    </div>\n</body>\n</html>\nENDOFPHP\n\necho \"Arquivo local da instancia EC2\" > /var/www/html/local-file-1.txt\necho \"N?o compartilhado entre\
+              \ instancias\" > /var/www/html/local-file-2.txt\n\n# Recupera a senha do Secrets Manager\nDB_PASSWORD=$(aws secretsmanager get-secret-value --secret-id ${DbSecret} --region us-east-2 --query SecretString --output text | jq -r .password)\n\ncat > /var/www/html/db_config.php << DBCONF\n<?php define('DB_HOST','${DbEndpoint}');define('DB_USER','admin');define('DB_PASS','$DB_PASSWORD');define('DB_NAME','meubanco');function getDBConnection(){try{return new PDO(\"mysql:host=\".DB_HOST.\";dbname=\".DB_NAME,DB_USER,DB_PASS,[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION]);}catch(PDOException $e){return null;}}\nDBCONF\n\ncat > /var/www/html/rds.php << 'RDSPHP'\n<?php require_once 'db_config.php';$message='';$error='';$sql=\"CREATE TABLE IF NOT EXISTS mensagens(id INT AUTO_INCREMENT PRIMARY KEY,nome VARCHAR(100),descricao TEXT,instance_id VARCHAR(50),created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)\";if($_SERVER['REQUEST_METHOD']==='POST'&&isset($_POST['nome'])){$pdo=getDBConnection();if($pdo){try{$pdo->exec($sql);$stmt=$pdo->prepare(\"\
+              INSERT INTO mensagens(nome,descricao,instance_id)VALUES(?,?,?)\");$instanceId=@file_get_contents('http://169.254.169.254/latest/meta-data/instance-id')?:'N/A';$stmt->execute([$_POST['nome'],$_POST['descricao'],$instanceId]);$message='Salvo!';}catch(PDOException $e){$error='Erro: '.$e->getMessage();}}else{$error='Erro de conexao';}}$dados=[];$pdo=getDBConnection();if($pdo){try{$pdo->exec($sql);$stmt=$pdo->query(\"SELECT * FROM mensagens ORDER BY created_at DESC\");$dados=$stmt->fetchAll(PDO::FETCH_ASSOC);}catch(PDOException $e){$error='Erro: '.$e->getMessage();}}$instanceId=@file_get_contents('http://169.254.169.254/latest/meta-data/instance-id')?:'N/A';?>\n<!DOCTYPE html><html lang=\"pt-BR\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1.0\"><title>RDS MySQL</title><style>body{font-family:Arial,sans-serif;max-width:900px;margin:50px auto;padding:20px;background-color:#f5f5f5}.container{background-color:white;padding:30px;border-radius:8px;box-shadow:0\
+              \ 2px 4px rgba(0,0,0,0.1);margin-bottom:20px}h1{color:#232f3e;border-bottom:3px solid #ff9900;padding-bottom:10px}.form-group{margin-bottom:15px}label{display:block;margin-bottom:5px;font-weight:bold;color:#232f3e}input[type=\"text\"],textarea{width:100%;padding:10px;border:1px solid #ddd;border-radius:4px;box-sizing:border-box}textarea{min-height:80px}button{background-color:#ff9900;color:white;padding:12px 30px;border:none;border-radius:4px;cursor:pointer;font-size:16px;font-weight:bold}button:hover{background-color:#ec7211}.message{padding:15px;margin:15px 0;border-radius:4px}.success{background-color:#d4edda;color:#155724}.error{background-color:#f8d7da;color:#721c24}table{width:100%;border-collapse:collapse;margin-top:20px}th,td{padding:12px;text-align:left;border-bottom:1px solid #ddd}th{background-color:#232f3e;color:white}tr:hover{background-color:#f5f5f5}.info{background-color:#e6f2ff;padding:15px;border-left:4px solid #0066cc;margin:20px 0}a{color:#0066cc;text-decoration:none}a:hover{text-decoration:underline}.badge{background-color:#ff9900;color:white;padding:3px\
+              \ 8px;border-radius:3px;font-size:12px}</style></head><body><div class=\"container\"><h1>\U0001F5C4? RDS MySQL</h1><div class=\"info\"><strong>Instance:</strong> <?=htmlspecialchars($instanceId)?><br><strong>DB:</strong> <?=DB_NAME?><br><strong>Host:</strong> <?=DB_HOST?></div><?php if($message):?><div class=\"message success\"><?=htmlspecialchars($message)?></div><?php endif;?><?php if($error):?><div class=\"message error\"><?=htmlspecialchars($error)?></div><?php endif;?><h2>\U0001F4DD Adicionar Registro</h2><form method=\"POST\"><div class=\"form-group\"><label>Nome:</label><input type=\"text\" name=\"nome\" required></div><div class=\"form-group\"><label>Descricao:</label><textarea name=\"descricao\"></textarea></div><button type=\"submit\">\U0001F4BE Salvar</button></form></div><div class=\"container\"><h2>\U0001F4CA Registros</h2><p>Total: <span class=\"badge\"><?=count($dados)?></span></p><?php if(empty($dados)):?><p>Nenhum registro. Adicione acima!</p><?php else:?><table><tr><th>ID</th><th>Nome</th><th>Descricao</th><th>Instance</th><th>Data</th></tr><?php\
+              \ foreach($dados as $r):?><tr><td><?=$r['id']?></td><td><?=htmlspecialchars($r['nome'])?></td><td><?=htmlspecialchars($r['descricao'])?></td><td><?=$r['instance_id']?></td><td><?=$r['created_at']?></td></tr><?php endforeach;?></table><?php endif;?><p style=\"margin-top:20px\"><a href=\"/\">? Locais</a> | <a href=\"/efs/\">EFS</a></p></div></body></html>\nRDSPHP\n\n# Cria arquivo PHP no EFS (compartilhado entre todas as instancias) que lista arquivos dinamicamente\ncat > /mnt/efs/html/index.php << 'ENDOFPHP'\n<?php\n$efsDir = '/mnt/efs/html';\n$instanceId = @file_get_contents('http://169.254.169.254/latest/meta-data/instance-id') ?: 'N/A';\n$files = @scandir($efsDir) ?: array();\n$files = array_diff($files, array('.', '..', 'index.php'));\n$files = array_values($files); // Reindexa o array\n?>\n<!DOCTYPE html>\n<html lang=\"pt-BR\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>Demonstracao EFS\
+              \ - Arquivos Compartilhados</title>\n    <style>\n        body {\n            font-family: Arial, sans-serif;\n            max-width: 800px;\n            margin: 50px auto;\n            padding: 20px;\n            background-color: #f5f5f5;\n        }\n        .container {\n            background-color: white;\n            padding: 30px;\n            border-radius: 8px;\n            box-shadow: 0 2px 4px rgba(0,0,0,0.1);\n        }\n        h1 {\n            color: #232f3e;\n            border-bottom: 3px solid #ff9900;\n            padding-bottom: 10px;\n        }\n        .info {\n            background-color: #e6f7e6;\n            padding: 15px;\n            border-left: 4px solid #00aa00;\n            margin: 20px 0;\n        }\n        .file-list {\n            background-color: #f9f9f9;\n            padding: 15px;\n            border-radius: 4px;\n            margin: 15px 0;\n        }\n        .file-item {\n            padding: 8px;\n            margin: 5px 0;\n    \
+              \        background-color: white;\n            border-left: 3px solid #00aa00;\n            display: flex;\n            justify-content: space-between;\n            align-items: center;\n        }\n        .file-item a {\n            color: #0066cc;\n            text-decoration: none;\n            font-weight: bold;\n        }\n        .file-item a:hover {\n            text-decoration: underline;\n        }\n        .file-size {\n            color: #666;\n            font-size: 0.9em;\n        }\n        a {\n            color: #0066cc;\n            text-decoration: none;\n        }\n        a:hover {\n            text-decoration: underline;\n        }\n    </style>\n</head>\n<body>\n    <div class=\"container\">\n        <h1>\U0001F310 Arquivos Compartilhados (Amazon EFS)</h1>\n        <div class=\"info\">\n            <strong>Localizacao:</strong> <?php echo htmlspecialchars($efsDir); ?><br>\n            <strong>Status:</strong> Armazenado no Amazon EFS<br>\n            <strong>Comportamento:</strong>\
+              \ Este arquivo ? compartilhado entre TODAS as instancias que montam este EFS<br>\n            <strong>Instance ID atual:</strong> <?php echo htmlspecialchars($instanceId); ?><br>\n            <strong>Total de arquivos:</strong> <?php echo count($files); ?>\n        </div>\n        <div class=\"file-list\">\n            <h3>Arquivos no EFS Disponiveis (Lista Dinamica):</h3>\n            <?php if (empty($files)): ?>\n                <div class=\"file-item\">Nenhum arquivo encontrado (exceto este index.php)</div>\n            <?php else: ?>\n                <?php foreach ($files as $file): ?>\n                    <?php\n                    $filePath = $efsDir . '/' . $file;\n                    $fileSize = is_file($filePath) ? filesize($filePath) : 0;\n                    $fileSizeFormatted = $fileSize > 1024 ? number_format($fileSize / 1024, 2) . ' KB' : $fileSize . ' bytes';\n                    $icon = is_dir($filePath) ? '\U0001F4C1' : '\U0001F4C4';\n                    ?>\n\
+              \                    <div class=\"file-item\">\n                        <span>\n                            <?php echo $icon; ?> \n                            <?php if (is_file($filePath)): ?>\n                                <a href=\"<?php echo htmlspecialchars($file); ?>\"><?php echo htmlspecialchars($file); ?></a>\n                            <?php else: ?>\n                                <?php echo htmlspecialchars($file); ?>\n                            <?php endif; ?>\n                        </span>\n                        <span class=\"file-size\"><?php echo $fileSizeFormatted; ?></span>\n                    </div>\n                <?php endforeach; ?>\n            <?php endif; ?>\n        </div>\n        <p><a href=\"/\">\U0001F448 Local</a> | <a href=\"/rds.php\">\U0001F5C4? RDS</a></p>\n    </div>\n</body>\n</html>\nENDOFPHP\n\necho \"Arquivo no EFS compartilhado\" > /mnt/efs/html/shared-file-1.txt\necho \"Vis?vel em todas as instancias\" > /mnt/efs/html/shared-file-2.txt\n\
+              echo '{\"message\":\"EFS compartilhado\",\"time\":\"'$(date -Iseconds)'\"}' > /mnt/efs/html/shared-data.json\n\nchown -R apache:apache /var/www/html /mnt/efs/html\nchmod -R 755 /var/www/html /mnt/efs/html\n\ncat > /etc/httpd/conf.d/efs.conf << EOF\n# Alias para servir arquivos do EFS\n# Funciona tanto para /efs quanto para /efs/\nAlias /efs /mnt/efs/html/\n\n# Configura??o do diret?rio EFS\n<Directory \"/mnt/efs/html\">\n    Options Indexes FollowSymLinks\n    AllowOverride None\n    Require all granted\n    DirectoryIndex index.php index.html\n</Directory>\nEOF\n\n\n# Configura PHP-FPM e Apache para processar PHP\necho \"Configurando PHP-FPM...\"\n\n# Prepara o diret?rio do socket PHP-FPM\nmkdir -p /var/run/php-fpm\nchown apache:apache /var/run/php-fpm\nchmod 755 /var/run/php-fpm\n\n# Configura o pool www do PHP-FPM\ncat > /etc/php-fpm.d/www.conf << 'EOF'\n[www]\nuser=apache\ngroup=apache\nlisten=/var/run/php-fpm/www.sock\nlisten.owner=apache\nlisten.group=apache\nlisten.mode=0660\n\
+              pm=dynamic\npm.max_children=50\npm.start_servers=5\npm.min_spare_servers=5\npm.max_spare_servers=35\nEOF\n\nsystemctl enable php-fpm\nsystemctl start php-fpm\nsleep 3\n\nif [ -S /var/run/php-fpm/www.sock ]; then\n    chown apache:apache /var/run/php-fpm/www.sock\n    chmod 660 /var/run/php-fpm/www.sock\nfi\n\nrm -f /etc/httpd/conf.d/php-fpm.conf /etc/httpd/conf.modules.d/15-php.conf\necho 'LoadModule proxy_module modules/mod_proxy.so\nLoadModule proxy_fcgi_module modules/mod_proxy_fcgi.so' > /etc/httpd/conf.modules.d/00-proxy.conf\necho '<FilesMatch \\.(php|phar)$$>\nSetHandler \"proxy:unix:/var/run/php-fpm/www.sock|fcgi://localhost\"\n</FilesMatch>\nDirectoryIndex index.php index.html' > /etc/httpd/conf.d/php.conf\n\ncat >> /etc/php-fpm.d/www.conf << EOF\nenv[RDS_ENDPOINT]='${DbEndpoint}'\nenv[RDS_USERNAME]='admin'\nenv[RDS_PASSWORD]='$DB_PASSWORD'\nenv[RDS_DATABASE]='meubanco'\nEOF\n\nsystemctl enable httpd\nsystemctl restart php-fpm httpd"
+            - EfsId:
+                Ref: AulaEFS
+              DbEndpoint:
+                Fn::GetAtt:
+                - AulaAuroraCluster
+                - Endpoint.Address
+              DbSecret:
+                Ref: AulaDBSecret
+        TagSpecifications:
+        - ResourceType: instance
+          Tags:
+          - Key: Name
+            Value: Aula-EC2-Instance
+  AulaASG:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: Aula-ASG
+      LaunchTemplate:
+        LaunchTemplateId:
+          Ref: AulaLaunchTemplate
+        Version:
+          Fn::GetAtt:
+          - AulaLaunchTemplate
+          - LatestVersionNumber
+      MinSize: 2
+      MaxSize: 4
+      DesiredCapacity: 2
+      HealthCheckType: ELB
+      HealthCheckGracePeriod: 300
+      VPCZoneIdentifier:
+      - Ref: AulaAppSubnetAZ1
+      - Ref: AulaAppSubnetAZ2
+      TargetGroupARNs:
+      - Ref: AulaTargetGroup
+      Tags:
+      - Key: Name
+        Value: Aula-ASG-Instance
+        PropagateAtLaunch: true
+Outputs:
+  ALBURL:
+    Description: URL do Application Load Balancer
+    Value:
+      Fn::Sub: http://${AulaALB.DNSName}
+    Export:
+      Name: Aula-ALB-URL
+  EFSFileSystemId:
+    Description: ID do EFS File System
+    Value:
+      Ref: AulaEFS
+    Export:
+      Name: Aula-EFS-ID
+  AuroraEndpoint:
+    Description: Endpoint do Aurora Cluster (Writer)
+    Value:
+      Fn::GetAtt:
+      - AulaAuroraCluster
+      - Endpoint.Address
+    Export:
+      Name: Aula-Aurora-Endpoint
+  AuroraReaderEndpoint:
+    Description: Endpoint do Aurora Cluster (Reader)
+    Value:
+      Fn::GetAtt:
+      - AulaAuroraCluster
+      - ReadEndpoint.Address
+    Export:
+      Name: Aula-Aurora-Reader-Endpoint
+  DBSecretArn:
+    Description: ARN do Secret com credenciais do banco
+    Value:
+      Ref: AulaDBSecret
+    Export:
+      Name: Aula-DB-Secret-ARN
